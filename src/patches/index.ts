@@ -5,7 +5,15 @@ import { patchMicrotasks, unpatchMicrotasks } from "./microtasks";
 import { patchObservers, unpatchObservers } from "./observers";
 import { patchEventTarget, unpatchEventTarget } from "./event-target";
 
-let patched = false;
+// Re-export individual unpatch functions
+export {
+  unpatchTimers,
+  unpatchXHR,
+  unpatchPromise,
+  unpatchMicrotasks,
+  unpatchObservers,
+  unpatchEventTarget,
+};
 
 /**
  * Apply all browser API patches to enable async context propagation.
@@ -14,11 +22,6 @@ let patched = false;
  * @returns A function that can be called to remove all patches
  */
 export function patchAll(): () => void {
-  if (patched) {
-    return () => {}; // Already patched, return no-op
-  }
-  patched = true;
-
   // Patch Promise continuation methods (.then, .catch, .finally)
   patchPromise();
 
@@ -45,9 +48,6 @@ export function patchAll(): () => void {
  * This function is idempotent - it will only unpatch once even if called multiple times.
  */
 export function unpatchAll(): void {
-  if (!patched) return;
-  patched = false;
-
   unpatchObservers();
   unpatchXHR();
   unpatchTimers();

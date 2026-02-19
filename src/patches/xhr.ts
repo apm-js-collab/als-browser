@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from "../async-local-storage";
-import { patch, unpatch } from "./patch-helper";
-
-const originalDescriptors = new Map<string, PropertyDescriptor>();
+import { patchDescriptor, unpatchDescriptor } from "./patch-helper";
 
 /**
  * Patch XMLHttpRequest to preserve async context.
@@ -24,23 +22,24 @@ export function patchXHR(): void {
   ];
 
   for (const prop of eventProps) {
-    const descriptor = Object.getOwnPropertyDescriptor(
+    patchDescriptor(
       XMLHttpRequest.prototype,
-      prop
-    );
-    if (descriptor?.set) {
-      // Store the original descriptor for unpatching
-      originalDescriptors.set(prop, descriptor);
+      prop,
+      (descriptor: PropertyDescriptor) => {
+        if (!descriptor.set) {
+          return descriptor;
+        }
 
-      const originalSet = descriptor.set;
-      Object.defineProperty(XMLHttpRequest.prototype, prop, {
-        ...descriptor,
-        set(handler: ((this: XMLHttpRequest, ev: any) => any) | null) {
-          const bound = handler ? AsyncLocalStorage.bind(handler) : null;
-          originalSet.call(this, bound);
-        },
-      });
-    }
+        const originalSet = descriptor.set;
+        return {
+          ...descriptor,
+          set(handler: ((this: XMLHttpRequest, ev: any) => any) | null) {
+            const bound = handler ? AsyncLocalStorage.bind(handler) : null;
+            originalSet.call(this, bound);
+          },
+        };
+      }
+    );
   }
 }
 
@@ -51,8 +50,18 @@ export function unpatchXHR(): void {
   if (!globalThis.XMLHttpRequest) return;
 
   // Restore original property descriptors for on* properties
-  originalDescriptors.forEach((descriptor, prop) => {
-    Object.defineProperty(XMLHttpRequest.prototype, prop, descriptor);
-  });
-  originalDescriptors.clear();
+  const eventProps = [
+    "onload",
+    "onerror",
+    "onabort",
+    "ontimeout",
+    "onprogress",
+    "onloadstart",
+    "onloadend",
+    "onreadystatechange",
+  ];
+
+  for (const prop of eventProps) {
+    unpatchDescriptor(XMLHttpRequest.prototype, prop);
+  }
 }

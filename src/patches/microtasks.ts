@@ -7,8 +7,6 @@ import { patch, unpatch } from "./patch-helper";
  * maintain their async context when they execute.
  */
 export function patchMicrotasks(): void {
-  if (!globalThis.queueMicrotask) return;
-
   patch(
     globalThis as any,
     "queueMicrotask",
@@ -25,7 +23,5 @@ export function patchMicrotasks(): void {
  * Remove the queueMicrotask patch, restoring original behavior.
  */
 export function unpatchMicrotasks(): void {
-  if (typeof globalThis.queueMicrotask !== "undefined") {
-    unpatch(globalThis as any, "queueMicrotask");
-  }
+  unpatch(globalThis as any, "queueMicrotask");
 }

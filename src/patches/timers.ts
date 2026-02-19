@@ -46,49 +46,43 @@ export function patchTimers(): void {
   );
 
   // Patch setImmediate (non-standard but available in some environments)
-  if ((globalThis as any).setImmediate) {
-    patch(
-      globalThis as any,
-      "setImmediate",
-      (original: any) => {
-        return function (callback: (...args: any[]) => void, ...args: any[]) {
-          const bound = AsyncLocalStorage.bind(callback);
-          return original(bound, ...args);
-        };
-      }
-    );
-  }
+  patch(
+    globalThis as any,
+    "setImmediate",
+    (original: any) => {
+      return function (callback: (...args: any[]) => void, ...args: any[]) {
+        const bound = AsyncLocalStorage.bind(callback);
+        return original(bound, ...args);
+      };
+    }
+  );
 
   // Patch requestAnimationFrame
-  if (typeof (globalThis as any).requestAnimationFrame !== "undefined") {
-    patch(
-      globalThis as any,
-      "requestAnimationFrame",
-      (original: typeof requestAnimationFrame) => {
-        return function (callback: FrameRequestCallback) {
-          const bound = AsyncLocalStorage.bind(callback);
-          return original(bound);
-        };
-      }
-    );
-  }
+  patch(
+    globalThis as any,
+    "requestAnimationFrame",
+    (original: typeof requestAnimationFrame) => {
+      return function (callback: FrameRequestCallback) {
+        const bound = AsyncLocalStorage.bind(callback);
+        return original(bound);
+      };
+    }
+  );
 
   // Patch requestIdleCallback
-  if (typeof (globalThis as any).requestIdleCallback !== "undefined") {
-    patch(
-      globalThis as any,
-      "requestIdleCallback",
-      (original: typeof requestIdleCallback) => {
-        return function (
-          callback: IdleRequestCallback,
-          options?: IdleRequestOptions
-        ) {
-          const bound = AsyncLocalStorage.bind(callback);
-          return original(bound, options);
-        };
-      }
-    );
-  }
+  patch(
+    globalThis as any,
+    "requestIdleCallback",
+    (original: typeof requestIdleCallback) => {
+      return function (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions
+      ) {
+        const bound = AsyncLocalStorage.bind(callback);
+        return original(bound, options);
+      };
+    }
+  );
 }
 
 /**
@@ -97,13 +91,7 @@ export function patchTimers(): void {
 export function unpatchTimers(): void {
   unpatch(globalThis as any, "setTimeout");
   unpatch(globalThis as any, "setInterval");
-  if ((globalThis as any).setImmediate) {
-    unpatch(globalThis as any, "setImmediate");
-  }
-  if (typeof (globalThis as any).requestAnimationFrame !== "undefined") {
-    unpatch(globalThis as any, "requestAnimationFrame");
-  }
-  if (typeof (globalThis as any).requestIdleCallback !== "undefined") {
-    unpatch(globalThis as any, "requestIdleCallback");
-  }
+  unpatch(globalThis as any, "setImmediate");
+  unpatch(globalThis as any, "requestAnimationFrame");
+  unpatch(globalThis as any, "requestIdleCallback");
 }
