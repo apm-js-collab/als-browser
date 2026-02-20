@@ -533,8 +533,6 @@ describe("EventTarget patch", () => {
         calls.push("fired");
       };
 
-      const isHappyDom = typeof window !== "undefined" && typeof document !== "undefined";
-
       // Run inside als.run() to ensure async context exists
       // This ensures our wrapping logic is exercised
       als.run(1234, () => {
@@ -543,17 +541,16 @@ describe("EventTarget patch", () => {
         target.addEventListener("test", handler, { capture: true });
         target.addEventListener("test", handler, { capture: false });
 
-        // Dispatch event - both should fire
-        // Note: happy-dom has a bug where only one fires, but pure Node.js and browsers work correctly
+        // Dispatch event - both should fire per DOM spec
         target.dispatchEvent(new Event("test"));
-        expect(calls.length).toBe(isHappyDom ? 1 : 2);
+        expect(calls.length).toBe(2);
 
         calls.length = 0;
 
         // Remove only the capture: false one
         target.removeEventListener("test", handler, { capture: false });
         target.dispatchEvent(new Event("test"));
-        expect(calls.length).toBe(isHappyDom ? 0 : 1);
+        expect(calls.length).toBe(1);
 
         calls.length = 0;
 

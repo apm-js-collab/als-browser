@@ -50,20 +50,22 @@ describe("Observers patch", () => {
 
       const promise = new Promise<void>((resolve) => {
         als.run(200, () => {
-          let count = 0;
           const observer = new MutationObserver(() => {
             stores.push(als.getStore());
-            count++;
-            if (count >= 3) {
-              observer.disconnect();
-              resolve();
-            }
+            observer.disconnect();
+            resolve();
           });
 
           observer.observe(target, { childList: true });
+
+          // Schedule mutations to allow observer to process between them
           target.appendChild(document.createElement("span"));
-          target.appendChild(document.createElement("div"));
-          target.appendChild(document.createElement("p"));
+          setTimeout(() => {
+            target.appendChild(document.createElement("div"));
+            setTimeout(() => {
+              target.appendChild(document.createElement("p"));
+            }, 0);
+          }, 0);
         });
       });
 
