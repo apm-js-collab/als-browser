@@ -10,6 +10,15 @@ export interface PatchTarget {
 }
 
 /**
+ * WeakMap to track patched descriptors
+ * Key: target object, Value: Map of property -> original descriptor
+ */
+const patchedDescriptors = new WeakMap<
+  PatchTarget,
+  Map<string | symbol, PropertyDescriptor>
+>();
+
+/**
  * Check if a target's property has been patched
  */
 export function isPatched(
@@ -84,8 +93,8 @@ export function isDescriptorPatched(
   target: PatchTarget,
   property: string | symbol
 ): boolean {
-  const descriptor = Object.getOwnPropertyDescriptor(target, property);
-  return descriptor ? ORIGINAL_SYMBOL in descriptor : false;
+  const propertyMap = patchedDescriptors.get(target);
+  return propertyMap ? propertyMap.has(property) : false;
 }
 
 /**
@@ -95,12 +104,12 @@ export function getOriginalDescriptor(
   target: PatchTarget,
   property: string | symbol
 ): PropertyDescriptor | undefined {
-  const descriptor = Object.getOwnPropertyDescriptor(target, property);
-  return (descriptor as any)?.[ORIGINAL_SYMBOL];
+  const propertyMap = patchedDescriptors.get(target);
+  return propertyMap?.get(property);
 }
 
 /**
- * Apply a patch to a property descriptor, storing the original on the patched descriptor
+ * Apply a patch to a property descriptor, storing the original in a WeakMap
  */
 export function patchDescriptor(
   target: PatchTarget,
@@ -123,8 +132,13 @@ export function patchDescriptor(
   // Apply the patch
   const patched = patcher(original);
 
-  // Store the original on the patched descriptor
-  (patched as any)[ORIGINAL_SYMBOL] = original;
+  // Store the original in the WeakMap
+  let propertyMap = patchedDescriptors.get(target);
+  if (!propertyMap) {
+    propertyMap = new Map();
+    patchedDescriptors.set(target, propertyMap);
+  }
+  propertyMap.set(property, original);
 
   Object.defineProperty(target, property, patched);
 }
@@ -142,5 +156,15 @@ export function unpatchDescriptor(
   }
 
   Object.defineProperty(target, property, original);
+
+  // Clean up the WeakMap entry
+  const propertyMap = patchedDescriptors.get(target);
+  if (propertyMap) {
+    propertyMap.delete(property);
+    if (propertyMap.size === 0) {
+      patchedDescriptors.delete(target);
+    }
+  }
+
   return true;
 }
