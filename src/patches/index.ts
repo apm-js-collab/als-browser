@@ -1,57 +1,47 @@
-import { patchTimers, unpatchTimers } from "./timers";
-import { patchXHR, unpatchXHR } from "./xhr";
-import { patchPromise, unpatchPromise } from "./promise";
+import { patchEventTarget, unpatchEventTarget } from "./event-target";
 import { patchMicrotasks, unpatchMicrotasks } from "./microtasks";
 import { patchObservers, unpatchObservers } from "./observers";
-import { patchEventTarget, unpatchEventTarget } from "./event-target";
+import { patchPromise, unpatchPromise } from "./promise";
+import { patchTimers, unpatchTimers } from "./timers";
+import { patchXHR, unpatchXHR } from "./xhr";
 
-let patched = false;
+// Re-export individual patch and unpatch functions
+// This allows users to selectively enable/disable specific patches
+export {
+  patchEventTarget,
+  unpatchEventTarget,
+  patchMicrotasks,
+  unpatchMicrotasks,
+  patchObservers,
+  unpatchObservers,
+  patchPromise,
+  unpatchPromise,
+  patchTimers,
+  unpatchTimers,
+  patchXHR,
+  unpatchXHR,
+};
 
 /**
  * Apply all browser API patches to enable async context propagation.
- * This function is idempotent - it will only patch once even if called multiple times.
- *
- * @returns A function that can be called to remove all patches
  */
-export function patchAll(): () => void {
-  if (patched) {
-    return () => {}; // Already patched, return no-op
-  }
-  patched = true;
-
-  // Patch Promise continuation methods (.then, .catch, .finally)
-  patchPromise();
-
-  // Patch microtask scheduling
-  patchMicrotasks();
-
-  // Patch generic EventTarget.addEventListener (covers most event-based APIs)
+export function patchAll(): void {
   patchEventTarget();
-
-  // Patch timer functions (setTimeout, setInterval, etc.)
-  patchTimers();
-
-  // Patch XHR on* properties (addEventListener is covered by EventTarget patch)
-  patchXHR();
-
-  // Patch Observer APIs (MutationObserver, ResizeObserver, etc.)
+  patchMicrotasks();
   patchObservers();
-
-  return unpatchAll;
+  patchPromise();
+  patchTimers();
+  patchXHR();
 }
 
 /**
  * Remove all browser API patches, restoring original behavior.
- * This function is idempotent - it will only unpatch once even if called multiple times.
  */
 export function unpatchAll(): void {
-  if (!patched) return;
-  patched = false;
-
-  unpatchObservers();
-  unpatchXHR();
-  unpatchTimers();
   unpatchEventTarget();
   unpatchMicrotasks();
+  unpatchObservers();
   unpatchPromise();
+  unpatchTimers();
+  unpatchXHR();
 }

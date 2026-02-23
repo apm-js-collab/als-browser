@@ -479,4 +479,224 @@ describe("EventTarget patch", () => {
       });
     });
   });
+
+  describe("context isolation", () => {
+    it("should NOT leak context when listener added without context", () => {
+      const target = new EventTarget();
+      let capturedContext: number | undefined;
+
+      const handler = () => {
+        capturedContext = als.getStore();
+      };
+
+      // Add listener WITHOUT any context
+      target.addEventListener("test", handler);
+
+      // Dispatch event FROM WITHIN a context
+      als.run(999, () => {
+        target.dispatchEvent(new Event("test"));
+      });
+
+      // Listener should see NO context (undefined), not 999
+      expect(capturedContext).toBeUndefined();
+    });
+
+    it("should NOT leak context when listener added with context A and dispatched in context B", () => {
+      const target = new EventTarget();
+      let capturedContext: number | undefined;
+
+      const handler = () => {
+        capturedContext = als.getStore();
+      };
+
+      // Add listener with context 100
+      als.run(100, () => {
+        target.addEventListener("test", handler);
+      });
+
+      // Dispatch event from context 200
+      als.run(200, () => {
+        target.dispatchEvent(new Event("test"));
+      });
+
+      // Listener should see context 100 (from registration), not 200 (from dispatch)
+      expect(capturedContext).toBe(100);
+    });
+  });
+
+  describe("removeEventListener with different options (bug fix verification)", () => {
+    it("should track same listener with different capture flags separately", () => {
+      const target = new EventTarget();
+      const calls: string[] = [];
+
+      const handler = () => {
+        calls.push("fired");
+      };
+
+      // Run inside als.run() to ensure async context exists
+      // This ensures our wrapping logic is exercised
+      als.run(1234, () => {
+        // Register same listener twice with different capture flags
+        // Per DOM spec, these are TWO separate registrations
+        target.addEventListener("test", handler, { capture: true });
+        target.addEventListener("test", handler, { capture: false });
+
+        // Dispatch event - both should fire per DOM spec
+        target.dispatchEvent(new Event("test"));
+        expect(calls.length).toBe(2);
+
+        calls.length = 0;
+
+        // Remove only the capture: false one
+        target.removeEventListener("test", handler, { capture: false });
+        target.dispatchEvent(new Event("test"));
+        expect(calls.length).toBe(1);
+
+        calls.length = 0;
+
+        // Remove the capture: true one
+        target.removeEventListener("test", handler, { capture: true });
+        target.dispatchEvent(new Event("test"));
+        expect(calls.length).toBe(0);
+      });
+    });
+
+    it("should track same listener with different event types separately", () => {
+      const target = new EventTarget();
+      const calls: string[] = [];
+
+      const handler = (evt: Event) => {
+        calls.push(evt.type);
+      };
+
+      als.run(1234, () => {
+        // Add same listener to multiple event types
+        target.addEventListener("click", handler);
+        target.addEventListener("mousemove", handler);
+        target.addEventListener("keydown", handler);
+
+        // Remove only one
+        target.removeEventListener("mousemove", handler);
+
+        // Dispatch all three
+        target.dispatchEvent(new Event("click"));
+        target.dispatchEvent(new Event("mousemove"));
+        target.dispatchEvent(new Event("keydown"));
+
+        // Should have fired for click and keydown only
+        expect(calls).toEqual(["click", "keydown"]);
+      });
+    });
+
+    it("should not accumulate listeners when adding/removing repeatedly", () => {
+      const target = new EventTarget();
+      let callCount = 0;
+
+      const handler = () => {
+        callCount++;
+      };
+
+      // Add and remove 100 times
+      for (let i = 0; i < 100; i++) {
+        target.addEventListener("test", handler);
+        target.removeEventListener("test", handler);
+      }
+
+      // Dispatch event - should not fire at all
+      target.dispatchEvent(new Event("test"));
+      expect(callCount).toBe(0);
+    });
+
+    it("should properly deduplicate same listener with same options", () => {
+      const target = new EventTarget();
+      let callCount = 0;
+
+      const handler = () => {
+        callCount++;
+      };
+
+      als.run(1234, () => {
+        // Per spec, adding the same listener multiple times with same options
+        // should NOT create multiple registrations
+        target.addEventListener("test", handler);
+        target.addEventListener("test", handler);
+        target.addEventListener("test", handler);
+
+        target.dispatchEvent(new Event("test"));
+
+        // Should only fire once
+        expect(callCount).toBe(1);
+      });
+    });
+
+    it("should handle React-like lifecycle with listener cleanup", () => {
+      const target = new EventTarget();
+      const mountCounts: number[] = [];
+
+      als.run(1234, () => {
+        // Simulate 10 mount/unmount cycles
+        for (let cycle = 0; cycle < 10; cycle++) {
+          let cycleCount = 0;
+
+          const handler = () => {
+            cycleCount++;
+          };
+
+          // Mount: add listener
+          target.addEventListener("pointermove", handler);
+
+          // Simulate some events during this mount
+          target.dispatchEvent(new Event("pointermove"));
+          target.dispatchEvent(new Event("pointermove"));
+
+          mountCounts.push(cycleCount);
+
+          // Unmount: remove listener
+          target.removeEventListener("pointermove", handler);
+
+          // After unmount, dispatch again - should not fire
+          target.dispatchEvent(new Event("pointermove"));
+        }
+
+        // Each mount should have seen exactly 2 events
+        expect(mountCounts).toEqual([2, 2, 2, 2, 2, 2, 2, 2, 2, 2]);
+      });
+    });
+
+    it("should handle options matching correctly", () => {
+      const target = new EventTarget();
+      let callCount = 0;
+
+      const handler = () => {
+        callCount++;
+      };
+
+      // Add with boolean false
+      target.addEventListener("test", handler, false);
+
+      // Remove with undefined (should match - both default to capture: false)
+      target.removeEventListener("test", handler);
+
+      target.dispatchEvent(new Event("test"));
+      expect(callCount).toBe(0);
+    });
+
+    it("should ignore passive/once flags for listener matching", () => {
+      const target = new EventTarget();
+      let callCount = 0;
+
+      const handler = () => {
+        callCount++;
+      };
+
+      // Add with passive: true
+      target.addEventListener("test", handler, { passive: true, capture: false });
+
+      // Remove - passive is not used in removeEventListener (only capture matters)
+      target.removeEventListener("test", handler, { capture: false });
+
+      target.dispatchEvent(new Event("test"));
+      expect(callCount).toBe(0);
+    });
+  });
 });
